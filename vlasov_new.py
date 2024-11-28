@@ -10,13 +10,11 @@ from scipy.signal import find_peaks
 
 """
 Gaussian has a characteristic length -> use power law distribution
-
-!! enforce mass and probability conservation, and non-negativity
-
+enforce probability conservation and non-negativity
 """
 
 Nx, Nv = 2000, 2000
-k, alpha, vmax = 0.1, 0.5, 20.0  # Wavenumber, perturbation factor, cutoff velocity
+k, alpha, vmax = 0.1, 0.5, 20.0
 dt = 0.025  # Time step
 t_end = 100.0  # End time
 L = 2 * np.pi / k
@@ -54,7 +52,6 @@ def plot_single(f, rho, title):
     axs[0].set_xlabel('x')
     axs[0].set_ylabel('v')
 
-    # Plot rho using the full x array (but you could trim it similarly if needed)
     axs[1].fill_between(x[rho_mask], rho[rho_mask], color='black')
     axs[1].set_title('rho')
     axs[1].legend()
@@ -125,12 +122,8 @@ def plot_two(f1, f2, rho1, rho2, title, scale_factor):
     f1_trim = np.where(f1_trim > MIN_SHOW, 1, 0)
     f2_trim = np.where(f2_trim > MIN_SHOW, 1.2, 0)
 
-    # Rescale f2_trim if requested
     if scale_factor != 1.0:
-        # Rescale f2 using scipy.ndimage.zoom to allow arbitrary scale factors
-        f2_trim = scipy.ndimage.zoom(f2_trim, scale_factor, order=1)  # Linear interpolation
-        
-        # Pad or trim f2_trim to match the size of f1_trim
+        f2_trim = scipy.ndimage.zoom(f2_trim, scale_factor, order=1)
         padx = (f1_trim.shape[0] - f2_trim.shape[0]) // 2
         padv = (f1_trim.shape[1] - f2_trim.shape[1]) // 2
         f2_trim = np.pad(f2_trim, ((padx, padx), (padv, padv)), mode='constant')
@@ -147,7 +140,6 @@ def plot_two(f1, f2, rho1, rho2, title, scale_factor):
 
     fig, axs = plt.subplots(1, 2, figsize=(15, 5), dpi=400)
 
-    # Plot f1 and f2 with transparency
     pcm1 = axs[0].pcolor(x_trim, v_trim, f1_trim[:-1, :-1].T, shading='auto', cmap='Blues', alpha=0.5)
     pcm2 = axs[0].pcolor(x_trim, v_trim, f2_trim[:-1, :-1].T, shading='auto', cmap='Reds', alpha=0.5)
     axs[0].text(0.5*x_trim.max(), 0.8*v_trim.max(), f'scale factor = {scale_factor}', fontsize=8, color='black')
@@ -156,7 +148,6 @@ def plot_two(f1, f2, rho1, rho2, title, scale_factor):
     axs[0].set_xlabel('x')
     axs[0].set_ylabel('v')
 
-    # Rescale and align rho2 if requested
     if scale_factor != 1.0:
         rho2 = scipy.ndimage.zoom(rho2, scale_factor, order=1)
         
@@ -217,11 +208,11 @@ def x_half_shift(f):
         shift -= int_shift
 
         f[:, j] = np.roll(f[:,j], int(sign * int_shift))
-        # note circular shift is typical of periodic BCs
+        # note circular shift is typical of periodic BCs but works since mass vanishes at the boundaries
 
         Dxf = np.zeros(Nx)
         Dxf[i] = shift * (f[i,j] + sign * (f[i+1, j] - f[i-1, j]) * 0.25 * (1 - shift))
-        Dxf[0], Dxf[-1] = Dxf[-2], Dxf[1] # change this - we don't need periodic BCs
+        Dxf[0], Dxf[-1] = Dxf[-2], Dxf[1]
 
         f[i,j] = f[i,j] + Dxf[i - int(sign)] - Dxf[i]
 
@@ -323,7 +314,7 @@ def energy(f):
 MIN_SHOW = 0.01
 N_steps = 5000
 
-def main():
+def get_plot_times():
     #history = pickle.load(open('history1.pkl', 'rb')) + pickle.load(open('history2.pkl', 'rb')) + pickle.load(open('history3.pkl', 'rb'))
     history = pickle.load(open('long_time/history_fine.pkl', 'rb')) + pickle.load(open('long_time/history_fine2.pkl', 'rb')) + pickle.load(open('long_time/history_fine3.pkl', 'rb')) + pickle.load(open('long_time/history_fine4.pkl', 'rb'))
     print(len(history))
@@ -355,25 +346,22 @@ def main():
     # evolve forward and repeat plotting
     # -> minimise resolution limitations, plot only for |x| > xmin
 
-#def main():
-    #f = initial_f(x[:, None], v[None, :])
-    f = pickle.load(open('long_time/history_fine3.pkl', 'rb'))[-1]
+def main():
+    f = initial_f(x[:, None], v[None, :])
     tot_p = np.sum(f)
     history = []
-    
 
     with tqdm(total=N_steps, desc="Progress") as global_bar:
-        for T in range(1, N_steps):
+        for T in range(N_steps):
             f, rho = advance(f)
-            #f = f / np.sum(f) * tot_p
-            # how to enforce energy conservation ?
+            f = f / np.sum(f) * tot_p
 
             if T % 100 == 0:
                 e = energy(f)
                 print(f'Energy: {e}')
                 print(f'Density: {np.sum(f)}')
                 history.append(np.copy(f))
-                #plot_single(f, rho, f't={T+10700}')
+                plot_single(f, rho, f't={T}')
 
             global_bar.update(1)
     
